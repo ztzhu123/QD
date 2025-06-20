@@ -1,1 +1,1 @@
-Please download _data_ from [here](https://doi.org/10.5281/zenodo.14058873).
+Please download _data_ from [here](https://github.com/ztzhu123/QD)
