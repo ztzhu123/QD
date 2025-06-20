@@ -19,6 +19,7 @@ class AxesGroup:
         mark_index=True,
         footnote=None,
         indexes_3d=None,
+        init=True,
     ) -> None:
         self.num_axes = num_axes
         self.cols_or_rows = cols_or_rows
@@ -31,7 +32,19 @@ class AxesGroup:
         self.axes = None
         self.figs = figs
         self.inited = False
-        self.init_axes(indexes_3d=indexes_3d)
+        if init:
+            self.init_axes(indexes_3d=indexes_3d)
+
+    def init(self, figs, axes):
+        assert not self.inited
+        if not np.iterable(figs):
+            figs = [figs]
+        if not np.iterable(axes):
+            axes = [axes]
+        self.inited = True
+        self.figs = np.array(figs)
+        self.axes = np.array(axes)
+        return self
 
     def init_axes(self, indexes_3d=None):
         assert not self.inited
@@ -88,9 +101,11 @@ class AxesGroup:
         xlim_pad=None,
         xlim_pad_ratio=None,
         sharex=True,
-        fontsize=6,
+        fontsize=7,
         axes=None,
     ):
+        if xlim is not None:
+            xlim = [np.min(xlim), np.max(xlim)]
         axes = self.convert_axes(axes)
         if xlim is not None and xlim_pad is None:
             if xlim_pad_ratio is not None:
@@ -119,9 +134,12 @@ class AxesGroup:
         ylim_pad=None,
         ylim_pad_ratio=None,
         sharey=True,
-        fontsize=6,
+        fontsize=7,
         axes=None,
+        **kwargs,
     ):
+        if ylim is not None:
+            ylim = [np.min(ylim), np.max(ylim)]
         axes = self.convert_axes(axes)
         if ylim is not None and ylim_pad is None:
             if ylim_pad_ratio is not None:
@@ -131,9 +149,9 @@ class AxesGroup:
         for ax in axes:
             if ticks is not None:
                 if labels is not None and (not sharey or self.is_left(ax, axes=axes)):
-                    ax.set_yticks(ticks, labels=labels, fontsize=fontsize)
+                    ax.set_yticks(ticks, labels=labels, fontsize=fontsize, **kwargs)
                 else:
-                    ax.set_yticks(ticks)
+                    ax.set_yticks(ticks, **kwargs)
             if sharey and not self.is_left(ax, axes=axes):
                 ax.tick_params(labelleft=False)
             if ylim is not None:
@@ -215,7 +233,7 @@ class AxesGroup:
                 elif np.isscalar(axes[i]):
                     new_axes.append(self.axes[axes[i]])
                 else:
-                    assert axes[i] in self.axes
+                    # assert axes[i] in self.axes
                     new_axes.append(axes[i])
             axes = new_axes
         return axes
@@ -277,7 +295,7 @@ class AxesGroup:
         if self.col_major:
             raise NotImplementedError()
         assert ax in self.axes
-        index = self.axes.tolist().index(ax)
+        index = list(self.axes).index(ax)
         return index % self.cols_or_rows == 0
 
     def is_right(self, ax, axes=None):
@@ -290,24 +308,24 @@ class AxesGroup:
         if self.col_major:
             raise NotImplementedError()
         assert ax in self.axes
-        index = self.axes.tolist().index(ax)
+        index = list(self.axes).index(ax)
         return (index + 1) % self.cols_or_rows == 0 or index == self.num_axes - 1
 
     def row(self, ax):
         assert ax in self.axes
         assert not self.col_major
-        index = self.axes.tolist().index(ax)
+        index = list(self.axes).index(ax)
         index = index % (self.max_rows_or_cols_per_fig * self.cols_or_rows)
         return index // self.cols_or_rows
 
     def col(self, ax):
         assert ax in self.axes
         assert not self.col_major
-        index = self.axes.tolist().index(ax)
+        index = list(self.axes).index(ax)
         return index % self.cols_or_rows
 
     def get_fig_index(self, ax):
-        i = self.axes.tolist().index(ax)
+        i = list(self.axes).index(ax)
         num_axes_per_fig = self.max_rows_or_cols_per_fig * self.cols_or_rows
         return i // num_axes_per_fig
 
@@ -621,6 +639,13 @@ def move_to_monitor(fig=None, monitor_index=0, full_screen=False):
 
 def fig_in_a4(width, height, dpi=200):
     size = get_a4_size()
+    if width == "2col":
+        width = 1
+    elif width == "1col":
+        width = 8.8 / 18
+    else:
+        assert isinstance(width, (int, float))
+
     return plt.figure(figsize=(size[0] * width, size[1] * height), dpi=dpi)
 
 
@@ -684,6 +709,14 @@ def num_to_alphabet(num, upper=False):
     return chr(ord("`") + num + 1)
 
 
+def alphabet_to_num(alphabet):
+    """
+    start from 0
+    """
+    alphabet = alphabet.lower()
+    return ord(alphabet) - 97
+
+
 def annot_alphabet(
     axes=None,
     dx=0,
@@ -697,6 +730,8 @@ def annot_alphabet(
     top_dict=None,
     top_bond_dict=None,
     offset=0,
+    dx_dict=None,
+    dy_dict=None,
     **kwargs,
 ):
     """
@@ -704,11 +739,26 @@ def annot_alphabet(
     when tight_layout=True.
     """
     assert np.iterable(axes)
+    assert transform in ["ax", "fig"]
+    dx_dict = dx_dict or {}
+    dy_dict = dy_dict or {}
+    top_bond_dict = top_bond_dict or {}
+    left_bond_dict = left_bond_dict or {}
+    for d in [dx_dict, dy_dict, top_bond_dict, left_bond_dict]:
+        for k in list(d):
+            if isinstance(k, str):
+                v = d.pop(k)
+                k = alphabet_to_num(k) - offset
+                d[k] = v
+    for d in [top_bond_dict, left_bond_dict]:
+        for k in list(d):
+            if isinstance(d[k], str):
+                d[k] = alphabet_to_num(d[k]) - offset
     if transform == "ax":
         for i, ax in enumerate(axes):
             ax.text(
-                -0.1 + dx,
-                1.08 + dy,
+                -0.1 + dx + dx_dict.get(i, 0),
+                1.08 + dy + dy_dict.get(i, 0),
                 num_to_alphabet(i + offset, upper=upper),
                 fontname=fontname,
                 weight=weight,
@@ -734,14 +784,46 @@ def annot_alphabet(
                         top = np.max(tops)
                         break
             if left_bond_dict and i in left_bond_dict:
-                left = axes[left_bond_dict[i]].get_position().xmin
+                left = axes[left_bond_dict[i]].get_position().xmin + dx_dict.get(
+                    left_bond_dict[i], 0
+                )
 
             fig.text(
-                left + dx,
-                top + dy,
+                left + dx + dx_dict.get(i, 0),
+                top + dy + dy_dict.get(i, 0),
                 num_to_alphabet(i + offset, upper=upper),
                 fontname=fontname,
                 weight=weight,
                 transform=fig.transFigure,
                 **kwargs,
             )
+
+
+def add_fix_ax(fig, rect, loc="lower left", is_3d=False):
+    from mpl_toolkits.axes_grid1.inset_locator import AnchoredSizeLocator
+
+    if is_3d:
+        ax = fig.add_axes(rect, projection="3d")
+    else:
+        ax = fig.add_axes(rect)
+    axes_locator = AnchoredSizeLocator(
+        rect,
+        "100%",
+        "100%",
+        loc=loc,
+        bbox_transform=fig.transFigure,
+        borderpad=0,
+    )
+
+    ax.set_axes_locator(axes_locator)
+    return ax
+
+
+def add_ax(fig, left, bottom, width, height, is_3d=False):
+    if is_3d:
+        ax = fig.add_axes([0, 0, 1, 1], projection="3d")
+    else:
+        ax = fig.add_axes([0, 0, 1, 1])
+    pos = ax.get_position()
+    ax.set_position([pos.xmin + left, pos.ymin + bottom, width, height])
+    return ax

@@ -322,6 +322,81 @@ def plot2d(
     return ax
 
 
+def plot3d(
+    x,
+    y,
+    z,
+    ax=None,
+    figsize=[7, 5],
+    xlabel=None,
+    ylabel=None,
+    zlabel=None,
+    xlim="auto",
+    ylim="auto",
+    zlim="auto",
+    title=None,
+    fontsize=None,
+    cmap="Blues",
+    constrained_layout=True,
+):
+    x = np.asarray(x)
+    y = np.asarray(y)
+    z = np.asarray(z)
+    assert z.shape == (len(y), len(x))
+    Ny, Nx = z.shape
+
+    indexes = np.argsort(x)
+    x = x[indexes]
+    z = z[:, indexes]
+    indexes = np.argsort(y)
+    y = y[indexes]
+    z = z[indexes]
+
+    if ax is None:
+        ax = subplot(figsize=figsize, is_3d=True)
+    fig = ax.figure
+    if constrained_layout:
+        fig.set_constrained_layout(True)
+
+    dxs = np.diff(np.sort(x))
+    # assert len(np.unique(dxs)) == 1
+    dx = dxs[0]
+
+    dys = np.diff(np.sort(y))
+    # assert len(np.unique(dys)) == 1
+    dy = dys[0]
+
+    # new_x = np.append(x, x[-1] + dx) - dx / 2
+    # new_y = np.append(y, y[-1] + dy) - dy / 2
+
+    # X, Y = np.meshgrid(new_x, new_y)
+    X, Y = np.meshgrid(x, y)
+    ax.plot_surface(X, Y, z, cmap=cmap)
+
+    if xlim == "auto":
+        xlim = [x.min() - 0.01 * dx, x.max() + 0.01 * dx]
+    if ylim == "auto":
+        ylim = [y.min() - 0.01 * dy, y.max() + 0.01 * dy]
+    if zlim == "auto":
+        zlim = [z.min(), z.max()]
+    if xlim is not None:
+        ax.set_xlim(*xlim)
+    if ylim is not None:
+        ax.set_ylim(*ylim)
+    if zlim is not None:
+        ax.set_zlim(*zlim)
+
+    if xlabel is not None:
+        ax.set_xlabel(xlabel, {"fontsize": fontsize})
+    if ylabel is not None:
+        ax.set_ylabel(ylabel, {"fontsize": fontsize})
+    if zlabel is not None:
+        ax.set_zlabel(zlabel, {"fontsize": fontsize}, labelpad=10)
+    if title is not None:
+        ax.set_title(title, fontsize=fontsize)
+    return ax
+
+
 def plot_ecdf(
     x,
     mean=True,
@@ -442,4 +517,85 @@ def plot_ecdf(
         ax.set_ylim(*ylim)
     if constrained_layout:
         ax.figure.set_constrained_layout(1)
+    return ax
+
+
+def bar(
+    y,
+    yerr=None,
+    xlabel=None,
+    ylabel=None,
+    ylim=None,
+    x_tick_labels=None,
+    x_tick_label_rotation=0,
+    label=None,
+    width=0.25,
+    vline_lw=0,
+    title=None,
+    xs=None,
+    ax=None,
+    palette="default",
+    color=None,
+    grid=True,
+    offset=0,
+    constrained_layout=True,
+    **kwargs,
+):
+    if ax is None:
+        ax = subplot(figsize=[10, 4])
+    if constrained_layout:
+        ax.figure.set_constrained_layout(True)
+    y = np.array(y)
+    if len(y.shape) == 1:
+        y = y.reshape(1, -1)
+    n = len(y)
+    if label is None:
+        label = [""] * n
+        legend_on = False
+    else:
+        legend_on = True
+        if isinstance(label, str):
+            label = [label] * n
+    if isinstance(palette, str):
+        palette = color_palette(palette)
+    offsets = np.arange(-(n - 1) / 2, (n - 2) / 2 + 1, 1) * width + offset
+
+    x = np.arange(y.shape[1])
+    if yerr is None:
+        yerr = [None] * n
+    for i in range(n):
+        if xs is None:
+            _x = x + offsets[i]
+        else:
+            _x = xs
+        if color is None:
+            c = palette[i]
+        else:
+            c = color
+            c = color
+        ax.bar(
+            _x,
+            y[i],
+            width,
+            yerr=yerr[i],
+            label=label[i],
+            color=c,
+            **kwargs,
+        )
+    if xlabel is not None:
+        ax.set_xlabel(xlabel)
+    if ylabel is not None:
+        ax.set_ylabel(ylabel)
+    if legend_on:
+        ax.legend()
+    if ylim is None:
+        ylim = ax.get_ylim()
+    if x_tick_labels is not None:
+        ax.set_xticks(x, labels=x_tick_labels, rotation=x_tick_label_rotation)
+    if vline_lw > 0:
+        ax.vlines(x, *ylim, ls="--", color="k", alpha=0.5, lw=vline_lw)
+    ax.set_ylim(*ylim)
+    ax.grid(grid)
+    if title is not None:
+        ax.set_title(title)
     return ax
